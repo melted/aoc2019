@@ -36,7 +36,7 @@
       ((1) (do-op +))
       ((2) (do-op *))
       ((3) (set 1 input)
-            (exec (+ pc 2) output))
+           (exec (+ pc 2) output))
       ((4) (exec (+ pc 2) (cons (get 1) output)))
       ((5) (jump not))
       ((6) (jump (λ (x) x)))

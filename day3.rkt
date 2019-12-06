@@ -1,5 +1,6 @@
-#lang racket
-
+#lang racket/base
+(require racket/file)
+(require racket/string)
 (struct lines (hors verts) #:transparent)
 
 (struct vertical (x y1 y2 steps dir) #:transparent)
@@ -43,5 +44,6 @@
          (find-crossings (lines-hors b) (lines-verts a))))
   (displayln (car (sort crossings < #:key car)))
   (displayln (car (sort crossings < #:key cadr))))
-  
+
+(solve) 
 
