@@ -1,0 +1,137 @@
+#lang racket
+
+(define (make-code str)
+  (define vals (map string->number
+                    (string-split (string-trim str) ",")))
+  (for/hash ((i (range (length vals)))
+             (v vals))
+    (values i v)))
+
+(define get-code
+  (let ((code (make-code (file->string "data/input13.txt"))))
+    (lambda () (hash-copy code))))
+
+(struct vec2 (x y) #:transparent)
+
+(struct io (score panel seq) #:mutable #:transparent)
+(struct state (pc mem runlevel base io) #:mutable)
+
+(define directions (vector (vec2 0 -1) (vec2 1 0) (vec2 0 1) (vec2 -1 0)))
+
+(define (vec2+ v1 v2)
+  (vec2 (+ (vec2-x v1) (vec2-x v2))
+        (+ (vec2-y v1) (vec2-y v2))))
+
+(define (render st)
+  (define output (for/vector ((i (range 21)))
+                   (make-string 40 #\space)))
+  (for (((k v) (io-panel (state-io st))))
+    (define ch
+      (case v
+        ((0) #\space)
+        ((1) #\#)
+        ((2) #\D)
+        ((3) #\=)
+        ((4) #\o)))
+    (string-set! (vector-ref output (vec2-y k)) (vec2-x k) ch))
+  (for-each displayln (vector->list output))
+  (displayln (format "-------- ~a ----------" (io-score (state-io st)))))
+  
+
+  
+(define (run st)
+  (define code (state-mem st))
+  (define dev (state-io st))
+  (define ball-prev #f)
+  (define predicted #f)
+  (define paddle-pos #f)
+  (define (exec pc output)
+    (define bop (hash-ref code pc))
+    (define op (remainder bop 100))
+    (define (mode n)
+      (remainder (quotient bop (expt 10 (+ n 1))) 10))
+    (define (get n)
+      (let ((val (hash-ref code (+ pc n) 0)))
+        (case (mode n)
+          ((0) (hash-ref code val 0)) 
+          ((1) val)
+          ((2) (hash-ref code (+ val (state-base st)) 0)))))
+    (define (set n x)
+      (define addr (hash-ref code (+ pc n)))
+      (case (mode n)
+        ((0) (hash-set! code addr x))
+        ((1) (error "can't set immediate"))
+        ((2) (hash-set! code (+ addr (state-base st)) x))))
+    (define (jump cd)
+      (if (cd (= (get 1) 0))
+          (exec (get 2) output)
+          (exec (+ pc 3) output)))
+    (define (test op)
+      (set 3 (if (op (get 1) (get 2)) 1 0))
+      (exec (+ pc 4) output))
+    (define (do-op f)
+      (set 3 (f (get 1) (get 2)))
+      (exec (+ pc 4) output))
+    (define (handle-input)
+      ;;  (render st)
+      (if (and predicted paddle-pos)
+          (set 1 (sgn (- predicted (vec2-x paddle-pos))))
+          (set 1 0))
+      (exec (+ pc 2) output))
+    (define (handle-output)
+      (define seq (io-seq dev))
+      (set-io-seq! dev (modulo (+ seq 1) 3))
+      (case seq
+        ((0 1) (exec (+ pc 2) (cons (get 1) output)))
+        ((2) (let ((x (cadr output))
+                   (y (car output))
+                   (t (get 1))) 
+               (if (= x -1)
+                   (set-io-score! dev (get 1))
+                   (hash-set! (io-panel dev) (vec2 x y) t))
+               (when (= t 4)
+                 (when ball-prev
+                   (define dir (- x ball-prev))
+                   (when paddle-pos
+                     (set! predicted (+ x (* dir (- (vec2-y paddle-pos) y 1))))))
+                 (set! ball-prev x))
+               (when (= t 3)
+                 (set! paddle-pos (vec2 x y)))
+               (exec (+ pc 2) '())))))
+    (set-state-pc! st pc)
+    (case op
+      ((1) (do-op +))
+      ((2) (do-op *))
+      ((3) (handle-input))
+      ((4) (handle-output))
+      ((5) (jump not))
+      ((6) (jump (λ (x) x)))
+      ((7) (test <))
+      ((8) (test =))
+      ((9) (set-state-base! st (+ (state-base st) (get 1)))
+           (exec (+ pc 2) output))
+      ((99) (state pc code 'halted (state-base st) (state-io st)))
+      (else (error (format "unknown op ~a" bop)))))
+  (exec (state-pc st) '()))
+
+(define (new-state code)
+  (state 0 code 'ready 0 (io 0 (make-hash) 0)))
+
+(define (solve1)
+  (define init (new-state (get-code)))
+  (define out (run init))
+  (for/sum ((i (in-hash-values (io-panel (state-io out))))
+            #:when (= i 2))
+    1))
+
+(define (solve2)
+  (define init (new-state (get-code)))
+  (hash-set! (state-mem init) 0 2)
+  (let ((st (run init)))
+    (io-score (state-io st))))
+
+(solve1)
+(solve2)
+  
+
+
