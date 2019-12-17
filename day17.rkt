@@ -13,7 +13,7 @@
 
 (struct vec2 (x y) #:transparent)
 
-(struct state (pc mem runlevel base n pos output) #:mutable #:transparent)
+(struct state (pc mem runlevel base n pos output input) #:mutable #:transparent)
 
 (define directions (vector (vec2 0 -1) (vec2 0 1) (vec2 -1 0) (vec2 1 0)))
 
@@ -23,7 +23,7 @@
 
 (define (run st)
   (define code (state-mem st))
-  (define (exec pc)
+  (define (exec pc input)
     (define bop (hash-ref code pc))
     (define op (remainder bop 100))
     (define (mode n)
@@ -42,19 +42,23 @@
         ((2) (hash-set! code (+ addr (state-base st)) x))))
     (define (jump cd)
       (if (cd (= (get 1) 0))
-          (exec (get 2))
-          (exec (+ pc 3))))
+          (exec (get 2) input)
+          (exec (+ pc 3) input)))
     (define (test op)
       (set 3 (if (op (get 1) (get 2)) 1 0))
-      (exec (+ pc 4)))
+      (exec (+ pc 4) input))
     (define (do-op f)
       (set 3 (f (get 1) (get 2)))
-      (exec (+ pc 4)))
+      (exec (+ pc 4) input))
     (define (handle-input)
-      (error "No input handling"))
+      (set 1 (car input))
+      (exec (+ pc 2) (cdr input)))
     (define (handle-output)
-      (set-state-output! st (cons (integer->char (get 1)) (state-output st)))
-      (exec (+ pc 2)))
+      (define op (get 1))
+      (if (> op 128)
+          (displayln op)
+          (set-state-output! st (cons (integer->char (get 1)) (state-output st))))
+      (exec (+ pc 2) input))
     (set-state-pc! st pc)
     (case op
       ((1) (do-op +))
@@ -66,14 +70,14 @@
       ((7) (test <))
       ((8) (test =))
       ((9) (set-state-base! st (+ (state-base st) (get 1)))
-           (exec (+ pc 2)))
+           (exec (+ pc 2) input))
       ((99) (state pc code 'halted (state-base st) (state-n st)
-                   (state-pos st) (state-output st)))
+                   (state-pos st) (state-output st) input))
       (else (error (format "unknown op ~a" bop)))))
-  (exec (state-pc st)))
+  (exec (state-pc st) (state-input st)))
 
 (define (new-state code)
-  (state 0 code 'ready 0 0 (vec2 0 0) '()))
+  (state 0 code 'ready 0 0 (vec2 0 0) '() '()))
   
 (define (render state)
   (define str (list->string (reverse (state-output state))))
@@ -91,4 +95,14 @@
         (* x y)
         0)))
 
-(sum-nexuses (run (new-state (get-code))))
+;; (render (run (new-state (get-code) '())))
+
+(define (process-input input)
+  (map char->integer (string->list input)))
+
+(define (solve2)
+  (define st (new-state (get-code)))
+  (define input (process-input "A,B,A,C,A,B,C,C,A,B\nR,8,L,10,R,8\nR,12,R,8,L,8,L,12\nL,12,L,10,L,8\nn\n"))
+  (hash-set! (state-mem st) 0 2)
+  (set-state-input! st input)
+  (run st))
