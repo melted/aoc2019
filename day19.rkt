@@ -55,9 +55,6 @@
       (exec (+ pc 2) (cdr input)))
     (define (handle-output)
       (set-state-output! st (+ (state-output st) (get 1)))
-      (when
-          (null? input)
-        (displayln (state-output st)))
       (exec (+ pc 2) input))
     (set-state-pc! st pc)
     (case op
@@ -79,7 +76,26 @@
 (define (new-state code input)
   (state 0 code 'ready 0 0 (vec2 0 0) 0 input))
 
-(define (solve)
+(define (solve1)
   (for*/sum ((x (in-range 50))
              (y (in-range 50)))
     (state-output (run (new-state (get-code) (list x y))))))
+
+(define (solve2)
+  (define (on x y)
+    (= 1 (state-output (run (new-state (get-code) (list x y))))))
+  (define (test y)
+    (define xstart (for/first ((xs (in-naturals 0))
+                               #:when (on xs y))
+                     xs))
+    (define xend (for/first ((xs (in-naturals xstart))
+                             #:when (not (on xs y)))
+                   xs))
+    (if (on (- xend 100) (+ y 99))
+        (+ y (* 10000 (- xend 100)))
+        #f))
+  (let loop ((y 10))
+    (define res (test y))
+    (if res
+        res
+        (loop (+ y 1)))))
